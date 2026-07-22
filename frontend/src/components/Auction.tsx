@@ -22,7 +22,6 @@ type Product = {
 } | null
 
 enum AuctionState {
-    BEFORE = 'BEFORE',
     DURING = 'DURING',
     END = 'END',
 }
@@ -91,14 +90,10 @@ export default function Auction() {
     }, [])
 
     const getAuctionState = (product: Product | null): AuctionState => {
-        if (!product) return AuctionState.BEFORE
-        if (!product.timerStartsAt || !product.timerEndsAt) return AuctionState.BEFORE
-        const start = new Date(product.timerStartsAt).getTime()
+        if (!product) return AuctionState.END
+        if (!product.timerEndsAt) return AuctionState.END
         const ends = new Date(product.timerEndsAt).getTime()
         const now = Date.now() + serverOffsetMs
-        if (ends <= start) return AuctionState.BEFORE
-        // If current time is before the configured start, auction hasn't begun
-        if (now < start) return AuctionState.BEFORE
         return ends > now ? AuctionState.DURING : AuctionState.END
     }
 
@@ -131,6 +126,7 @@ export default function Auction() {
                 const remaining = updateClock()
                 if (remaining <= 0) {
                     clearTimer()
+                    console.log("HERE")
                     refreshProduct()
                 }
             }, 250)
@@ -138,43 +134,16 @@ export default function Auction() {
             return () => clearTimer()
         }
 
-        // ensure no countdown runs before auction starts or after it ends
+        // ensure no countdown runs after it ends
         clearTimer()
-        if (state === AuctionState.BEFORE) {
-            if (product?.timerStartsAt) {
-                const updateStartClock = () => {
-                    const start = new Date(product.timerStartsAt!).getTime()
-                    const now = Date.now() + serverOffsetMs
-                    const diff = Math.max(0, start - now)
-                    setTimeLeft(formatDuration(diff))
-                    return diff
-                }
-
-                // const diff = updateStartClock()
-                timerRef.current = window.setInterval(() => {
-                    const remaining = updateStartClock()
-                    if (remaining <= 0) {
-                        clearTimer()
-                        refreshProduct()
-                    }
-                }, 250)
-
-                return () => clearTimer()
-            }
-
-            setTimeLeft('00d 00h 00m 00s')
-        }
         if (state === AuctionState.END) setTimeLeft('ENDED')
     }, [product, serverOffsetMs])
 
     const submitBid = async () => {
-        if (!product) return
         const stateBeforeSubmit = getAuctionState(product)
-        
-        if (stateBeforeSubmit !== AuctionState.DURING) {
-            setError('Auction has not started yet')
-            return
-        }
+
+        // Allow submitting when there is no product (first bidder starts the auction)
+        // or when the previous auction has ended. Do not block bids for scheduled auctions.
         // client-side validation
         if (!name || amount == null) {
             setError('Please provide both name and amount to bid')
@@ -227,9 +196,15 @@ export default function Auction() {
     }
 
     const quickInc = () => {
-        if (!product) return
+        const state = getAuctionState(product)
 
-        const latestPrice = product?.bids?.length
+        // If no product or auction already ended, start from 0
+        if (!product || state === AuctionState.END) {
+            setAmount((prev) => (prev == null ? 100 : prev + 100))
+            return
+        }
+
+        const latestPrice = product.bids && product.bids.length
         ? product.bids.reduce((highest: BidRecord, next: BidRecord) =>
             Number(next.amount) > Number(highest.amount) ? next : highest,
             product.bids[0],
@@ -270,11 +245,11 @@ export default function Auction() {
         <div className="auction">
         <header><strong>Timer:</strong> {timeLeft}</header>
         <main>
-            {!product && <p>Loading...</p>}
-            {product && product.timerStartsAt && <p>Started At - {new Date(product.timerStartsAt).toLocaleString()}</p>}
+            {!product && <p>No active auction — place a bid to start one.</p>}
+            {/* Removed pre-start display; auction starts when bidding begins */}
             {product && product.timerEndsAt && <p>Ends At - {new Date(product.timerEndsAt).toLocaleString()}</p>}
             {product && <p>Starting Price - {String(parseInt(product.startingPrice, 10))}</p>}
-            {product && getAuctionState(product) === AuctionState.BEFORE && <p>NOT YET STARTED</p>}
+            {/* Removed 'NOT YET STARTED' message; bidding allowed even when scheduled */}
             {product && getAuctionState(product) === AuctionState.DURING && (
             <div>
                 <p>
@@ -300,10 +275,7 @@ export default function Auction() {
                 <input value={amount != null ? String(amount) : ''} onChange={(e) => handleAmountChange(e.target.value)} placeholder="Amount" />
                 <button onClick={quickInc}>+100</button>
                 <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
-                <button
-                onClick={submitBid}
-                disabled={!product || getAuctionState(product) !== AuctionState.DURING || !name || amount == null}
-                >
+                <button onClick={submitBid} >
                 Bid
                 </button>
             </div>

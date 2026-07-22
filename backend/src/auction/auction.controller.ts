@@ -13,6 +13,6 @@ export class AuctionController {
 
   @Post('bid')
   async placeBid(@Body() body: CreateBidDto) {
-    return this.service.placeBid(body.productId, body.bidderName, body.amount);
+    return this.service.placeBid(body.bidderName, body.amount);
   }
 }

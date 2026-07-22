@@ -2,10 +2,6 @@ import { Type } from 'class-transformer';
 import { IsNotEmpty, IsString, IsInt, Min, Max, IsOptional, IsUUID } from 'class-validator';
 
 export class CreateBidDto {
-  @IsOptional()
-  @IsUUID()
-  productId?: string;
-
   @IsString()
   @IsNotEmpty()
   bidderName: string;
