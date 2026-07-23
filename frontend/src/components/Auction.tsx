@@ -53,7 +53,7 @@ export default function Auction() {
             }
             if (prod?.bids?.length) {
                 const topBid = prod.bids.reduce((highest: BidRecord, next: BidRecord) =>
-                parseInt(next.amount, 10) > parseInt(highest.amount, 10) ? next : highest,
+                    parseInt(next.amount, 10) > parseInt(highest.amount, 10) ? next : highest,
                 prod.bids[0])
                 setLatestBid({ bidderName: topBid.bidderName, amount: String(parseInt(topBid.amount, 10)) })
             }
@@ -126,7 +126,6 @@ export default function Auction() {
                 const remaining = updateClock()
                 if (remaining <= 0) {
                     clearTimer()
-                    console.log("HERE")
                     refreshProduct()
                 }
             }, 250)

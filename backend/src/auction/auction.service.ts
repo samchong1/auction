@@ -19,24 +19,23 @@ export class AuctionService implements OnModuleInit {
   async onModuleInit() {}
 
 
-  async getProduct(): Promise<{ product: Product & { currentPrice: string }; serverTime: string }> {
-    const [product] = await this.productRepo.find({
-      relations: ['bids'],
-      order: { createdAt: 'DESC' },
-      take: 1,
-    });
-    if (!product) throw new NotFoundException('No product found');
-    const latestBid = product.bids?.length
-      ? product.bids.reduce((highest: Bid, next: Bid) =>
-          parseFloat(next.amount) > parseFloat(highest.amount) ? next : highest,
-          product.bids[0],
-        )
-      : null;
-    return {
-      product: { ...product, currentPrice: latestBid ? latestBid.amount : product.startingPrice },
-      serverTime: new Date().toISOString(),
-    };
-  }
+	async getProduct(): Promise<{ product: Product & { currentPrice: string }; serverTime: string }> {
+		const [product] = await this.productRepo.find({
+			relations: ['bids'],
+			order: { createdAt: 'DESC' },
+			take: 1,
+		});
+		if (!product) throw new NotFoundException('No product found');
+		const latestBid = product.bids?.length
+			? product.bids.reduce((highest: Bid, next: Bid) =>
+				parseFloat(next.amount) > parseFloat(highest.amount) ? next : highest,
+			product.bids[0])
+		: null;
+		return {
+			product: { ...product, currentPrice: latestBid ? latestBid.amount : product.startingPrice },
+			serverTime: new Date().toISOString(),
+		};
+	}
 
     async placeBid(bidderName: string, amount: number) {
         let product: Product;
@@ -118,37 +117,26 @@ export class AuctionService implements OnModuleInit {
         const latestBid = product.bids?.length
         ? product.bids.reduce((highest: Bid, next: Bid) =>
             parseFloat(next.amount) > parseFloat(highest.amount) ? next : highest,
-            product.bids[0],
-            )
-        : null;
+		product.bids[0]) : null;
+
         const current = latestBid ? parseFloat(latestBid.amount) : parseFloat(product.startingPrice);
         const incoming = amount;
         if (!Number.isFinite(incoming)) {
-        throw new BadRequestException('Bid amount must be a valid number');
+       	 	throw new BadRequestException('Bid amount must be a valid number');
         }
         if (incoming > 9999999999999) {
-        throw new BadRequestException('Bid amount out of range');
+        	throw new BadRequestException('Bid amount out of range');
         }
         // Accept the incoming bid if we just created the product for this bidder.
         if (!isNewProduct && incoming <= current) throw new BadRequestException('Bid must be greater than current price');
-
-        // If product exists but had no timer (edge case), start it now.
-        if (!product.timerEndsAt) {
-        const now = new Date();
-        const ends = new Date(Date.now() + 60 * 1000);
-        product.timerStartsAt = now;
-        product.timerEndsAt = ends;
-        await this.productRepo.save(product);
-        this.setTimer(product.id, ends);
-        }
 
         const bid = this.bidRepo.create({ productId: product.id, bidderName, amount: incoming.toFixed(2) as any });
         const savedBid = await this.bidRepo.save(bid);
 
         const responseProduct = {
-        ...product,
-        bids: [...(product.bids || []), savedBid],
-        currentPrice: savedBid.amount,
+			...product,
+			bids: [...(product.bids || []), savedBid],
+			currentPrice: savedBid.amount,
         };
 
         // Broadcast to clients
@@ -157,22 +145,22 @@ export class AuctionService implements OnModuleInit {
         return { product: responseProduct, bid: savedBid };
   }
 
-  private setTimer(productId: string, endsAt: Date) {
-    const ms = endsAt.getTime() - Date.now();
-    if (ms <= 0) return this.endAuction(productId);
-    if (this.timers.has(productId)) clearTimeout(this.timers.get(productId));
-    const t = setTimeout(() => this.endAuction(productId), ms);
-    this.timers.set(productId, t);
-  }
+	private setTimer(productId: string, endsAt: Date) {
+		const ms = endsAt.getTime() - Date.now();
+		if (ms <= 0) return this.endAuction(productId);
+		if (this.timers.has(productId)) clearTimeout(this.timers.get(productId));
+		const t = setTimeout(() => this.endAuction(productId), ms);
+		this.timers.set(productId, t);
+	}
 
-  private async endAuction(productId: string) {
-    try {
-      const product = await this.productRepo.findOneOrFail({ where: { id: productId } });
+	private async endAuction(productId: string) {
+		try {
+			const product = await this.productRepo.findOneOrFail({ where: { id: productId } });
 
-      const topBid = await this.bidRepo.findOne({ where: { productId }, order: { amount: 'DESC' } });
-      this.gateway.broadcastAuctionEnd({ product, winner: topBid, serverTime: new Date().toISOString() });
-    } catch (err) {
-      this.logger.error('Error ending auction', err);
-    }
-  }
+			const topBid = await this.bidRepo.findOne({ where: { productId }, order: { amount: 'DESC' } });
+			this.gateway.broadcastAuctionEnd({ product, winner: topBid, serverTime: new Date().toISOString() });
+		} catch (err) {
+			this.logger.error('Error ending auction', err);
+		}
+	}
 }
